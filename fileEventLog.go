@@ -19,7 +19,7 @@ func (f fileEventLog) Emit(event Event) error {
 	default:
 		return fmt.Errorf("unsupported event %s:%s", event.Net(), event.Kind())
 	}
-	_, err := f.file.WriteString(str + "\n")
+	_, err := f.file.WriteString(fmt.Sprintf("%s: %s: %s\n", event.Net(), event.Kind(), str))
 	return err
 }
 

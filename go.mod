@@ -1,4 +1,4 @@
-module ethereum
+module github.com/itsabgr/watcher
 
 go 1.16
 

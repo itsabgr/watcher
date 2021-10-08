@@ -1,7 +1,6 @@
 package watcher
 
 import (
-	"fmt"
 	"os"
 )
 
@@ -10,21 +9,13 @@ type fileEventLog struct {
 }
 
 func (f fileEventLog) Emit(event Event) error {
-	var str string
-	switch event.(type) {
-	case EthereumFinEvent:
-		str = ethereumTxToString(event.(EthereumFinEvent).Tx())
-	case EthereumTxEvent:
-		str = ethereumTxToString(event.(EthereumTxEvent).Tx())
-	default:
-		return fmt.Errorf("unsupported event %s:%s", event.Net(), event.Kind())
-	}
-	_, err := f.file.WriteString(fmt.Sprintf("%s: %s: %s\n", event.Net(), event.Kind(), str))
+	_, err := f.file.Write(event.MarshalYAML())
+	f.file.WriteString("\n")
 	return err
 }
 
 func (f fileEventLog) Close() error {
-	return f.Close()
+	return nil
 }
 
 func NewFileEventLog(file *os.File) (EventLog, error) {

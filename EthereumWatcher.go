@@ -13,37 +13,39 @@ type EthereumWatcher interface {
 
 type ethereumWatcher struct {
 	client          *ethclient.Client
-	lastBlockNumber *big.Int
+	nextBlockNumber *big.Int
+}
+
+func (e *ethereumWatcher) incBlock() {
+	e.nextBlockNumber = big.NewInt(0).Add(e.nextBlockNumber, big.NewInt(1))
+}
+func (e *ethereumWatcher) BlockNumber() *big.Int {
+	return big.NewInt(0).Set(e.nextBlockNumber)
 }
 
 func (e *ethereumWatcher) Pull(ctx context.Context) ([]Event, error) {
 again:
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
-	lastBlockNumber, err := e.client.BlockNumber(ctx)
+	lastBlock, err := e.client.BlockByNumber(ctx, e.nextBlockNumber)
 	if err != nil {
+		if err.Error() == "not found" {
+			runtime.Gosched()
+			goto again
+		}
 		return nil, err
 	}
-	lastBlockNumberBig := big.NewInt(int64(lastBlockNumber))
-	if e.lastBlockNumber.Cmp(lastBlockNumberBig) == 0 {
-		runtime.Gosched()
-		goto again
-	}
-	//
-	lastBlock, err := e.client.BlockByNumber(ctx, lastBlockNumberBig)
-	if err != nil {
-		return nil, err
-	}
-	lastFinBlock, err := e.client.BlockByNumber(ctx, big.NewInt(0).Sub(lastBlockNumberBig, big.NewInt(6)))
+	lastFinBlock, err := e.client.BlockByNumber(ctx, big.NewInt(0).Sub(e.nextBlockNumber, big.NewInt(6)))
 	if err != nil {
 		return nil, err
 	}
 	lastTxs := lastBlock.Transactions()
 	lastFinTx := lastFinBlock.Transactions()
 	events := make([]Event, 0, lastTxs.Len()+lastFinTx.Len())
-	for _, tx := range lastTxs {
-		event, err := NewEthereumTxEvent(tx)
+	for i, tx := range lastTxs {
+		sender, err := e.client.TransactionSender(ctx, tx, lastBlock.Hash(), uint(i))
+		if err != nil {
+			return nil, err
+		}
+		event, err := NewEthereumTxEvent(tx, &sender, lastBlock.Number())
 		if err != nil {
 			return nil, err
 		}
@@ -51,14 +53,18 @@ again:
 	}
 	//
 
-	for _, tx := range lastFinTx {
-		event, err := NewEthereumFinEvent(tx)
+	for i, tx := range lastFinTx {
+		sender, err := e.client.TransactionSender(ctx, tx, lastFinBlock.Hash(), uint(i))
+		if err != nil {
+			return nil, err
+		}
+		event, err := NewEthereumFinEvent(tx, &sender, lastFinBlock.Number())
 		if err != nil {
 			return nil, err
 		}
 		events = append(events, event)
 	}
-	e.lastBlockNumber = lastBlockNumberBig
+	e.incBlock()
 	return events, nil
 }
 
@@ -67,9 +73,9 @@ func (e *ethereumWatcher) Close() error {
 	return nil
 }
 
-func NewEthereumWatcher(client *ethclient.Client, lastBlockNum *big.Int) (EthereumWatcher, error) {
+func NewEthereumWatcher(client *ethclient.Client, nextBlockNum *big.Int) (EthereumWatcher, error) {
 	o := &ethereumWatcher{}
 	o.client = client
-	o.lastBlockNumber = big.NewInt(0).Set(lastBlockNum)
+	o.nextBlockNumber = big.NewInt(0).Set(nextBlockNum)
 	return o, nil
 }

@@ -34,6 +34,11 @@ github.com/gorilla/websocket
 # github.com/itsabgr/go-handy v0.0.0-20210902090010-6f8910d207ff
 ## explicit
 github.com/itsabgr/go-handy
+# github.com/sakirsensoy/genv v1.0.1
+## explicit
+github.com/sakirsensoy/genv
+github.com/sakirsensoy/genv/dotenv
+github.com/sakirsensoy/genv/dotenv/autoload
 # github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible
 github.com/shirou/gopsutil/cpu
 github.com/shirou/gopsutil/internal/common
@@ -50,3 +55,6 @@ golang.org/x/sys/unix
 golang.org/x/sys/windows
 # gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce
 gopkg.in/natefinch/npipe.v2
+# gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c
+## explicit
+gopkg.in/yaml.v3

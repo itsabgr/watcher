@@ -2,16 +2,26 @@ package watcher
 
 import (
 	"context"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"io"
+	"math/big"
 )
 
-type WithTx interface {
-	Tx() *types.Transaction
+type Repo interface {
+	StoreTxsByBlockID(Tx) error
+	FindTxsByBlockID(blockID *big.Int) ([]Tx, error)
+	PurgeTxsByBlockID(blockID *big.Int) error
 }
-type WithSender interface {
-	Sender() *common.Address
+type Tx interface {
+	Sender() []byte
+	Receiver() []byte
+	ID() []byte
+	Amount() *big.Int
+	Net() string
+	Kind() string
+	Block() *big.Int
+}
+type WithTx interface {
+	Tx() Tx
 }
 type EventLog interface {
 	Emit(Event) error

@@ -2,8 +2,6 @@ package watcher
 
 import (
 	"errors"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/itsabgr/go-handy"
 	"gopkg.in/yaml.v3"
 	"math/big"
@@ -13,31 +11,29 @@ import (
 type EthereumTxEvent interface {
 	Event
 	WithTx
-	WithSender
 }
 
 type ethereumTxEvent struct {
-	tx     *types.Transaction
-	time   time.Time
-	sender *common.Address
-	block  *big.Int
+	tx    EthereumTx
+	time  time.Time
+	block *big.Int
 }
 
 func (n *ethereumTxEvent) MarshalYAML() []byte {
 	b, err := yaml.Marshal(struct {
-		To, From                                                      *common.Address
-		Event, Net, Tx                                                string
+		To, From, Tx                                                  []byte
+		Event, Net                                                    string
 		Timestamp, Amount, Gas, GasPrice, GasFeeCap, GasTipCap, Block uint64
 	}{
 		Event:     n.Kind(),
-		Tx:        n.tx.Hash().Hex(),
+		Tx:        n.tx.ID(),
 		Net:       n.Net(),
 		Block:     n.block.Uint64(),
 		Timestamp: uint64(n.time.Unix()),
-		To:        n.tx.To(),
-		From:      n.sender,
-		Amount:    n.tx.Value().Uint64(),
-		Gas:       n.tx.Gas(),
+		To:        n.tx.Receiver(),
+		From:      n.tx.Receiver(),
+		Amount:    n.tx.Amount().Uint64(),
+		Gas:       n.tx.Gas().Uint64(),
 		GasPrice:  n.tx.GasPrice().Uint64(),
 		GasFeeCap: n.tx.GasFeeCap().Uint64(),
 		GasTipCap: n.tx.GasTipCap().Uint64(),
@@ -45,11 +41,8 @@ func (n *ethereumTxEvent) MarshalYAML() []byte {
 	handy.Throw(err)
 	return b
 }
-func (n *ethereumTxEvent) Sender() *common.Address {
-	return n.sender
-}
 
-func (n *ethereumTxEvent) Tx() *types.Transaction {
+func (n *ethereumTxEvent) Tx() Tx {
 	return n.tx
 }
 
@@ -61,14 +54,12 @@ func (n *ethereumTxEvent) Kind() string {
 	return "transaction"
 }
 
-func NewEthereumTxEvent(tx *types.Transaction, sender *common.Address, block *big.Int) (EthereumTxEvent, error) {
+func NewEthereumTxEvent(tx EthereumTx) (EthereumTxEvent, error) {
 	if tx == nil {
 		panic(errors.New("nil tx ptr"))
 	}
 	o := &ethereumTxEvent{}
 	o.tx = tx
 	o.time = time.Now()
-	o.sender = sender
-	o.block = block
 	return o, nil
 }

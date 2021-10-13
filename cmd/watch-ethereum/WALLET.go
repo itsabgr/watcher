@@ -1,12 +1,15 @@
 package main
 
 import (
+	"encoding/hex"
 	_ "github.com/sakirsensoy/genv/dotenv/autoload"
 )
 import "github.com/sakirsensoy/genv"
 
-var WALLET = ""
+var WALLET []byte = nil
 
 func init() {
-	WALLET = genv.Key("WALLET").String()
+	var err error
+	WALLET, err = hex.DecodeString(genv.Key("WALLET").String())
+	panicerr(err)
 }

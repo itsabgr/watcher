@@ -1,9 +1,8 @@
 package main
 
 import (
-	"github.com/ethereum/go-ethereum/ethclient"
+	"bytes"
 	"github.com/itsabgr/watcher"
-	"math/big"
 	"os"
 )
 
@@ -11,22 +10,27 @@ func main() {
 	eventLog, err := watcher.NewFileEventLog(os.Stdout)
 	panicerr(err)
 	defer eventLog.Close()
-	ethClient, err := ethclient.DialContext(ctx, NET)
+	ethClient, err := watcher.NewEthereumInfuraClient(NET)
 	panicerr(err)
 	defer ethClient.Close()
-	startBlockNumber, err := ethClient.BlockNumber(ctx)
+	startBlockNumber, err := ethClient.GetLastBlockNumber(ctx)
 	panicerr(err)
-	ethereumWatcher, err := watcher.NewEthereumWatcher(ethClient, big.NewInt(int64(startBlockNumber)))
+	repo, err := watcher.NewMemRepo()
+	panicerr(err)
+	ethereumWatcher, err := watcher.NewEthereumWatcher(ethClient, startBlockNumber, repo)
 	panicerr(err)
 	defer ethereumWatcher.Close()
 	for {
 		events, err := ethereumWatcher.Pull(ctx)
 		panicerr(err)
 		for _, event := range events {
-			if WALLET != "" {
+			if WALLET != nil {
 				switch event.(type) {
 				case watcher.EthereumTxEvent, watcher.EthereumFinEvent:
-					if event.(watcher.WithSender).Sender().Hex() != WALLET {
+					switch {
+					case bytes.Equal(event.(watcher.WithTx).Tx().Sender(), WALLET),
+						bytes.Equal(event.(watcher.WithTx).Tx().Receiver(), WALLET):
+					default:
 						continue
 					}
 				default:

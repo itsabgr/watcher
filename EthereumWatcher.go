@@ -1,8 +1,8 @@
 package watcher
 
 import (
+	"bytes"
 	"context"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"math/big"
 	"runtime"
 )
@@ -12,8 +12,9 @@ type EthereumWatcher interface {
 }
 
 type ethereumWatcher struct {
-	client          *ethclient.Client
+	client          EthereumAPIClient
 	nextBlockNumber *big.Int
+	repo            Repo
 }
 
 func (e *ethereumWatcher) incBlock() {
@@ -25,7 +26,7 @@ func (e *ethereumWatcher) BlockNumber() *big.Int {
 
 func (e *ethereumWatcher) Pull(ctx context.Context) ([]Event, error) {
 again:
-	lastBlock, err := e.client.BlockByNumber(ctx, e.nextBlockNumber)
+	lastBlock, err := e.client.GetBlockByNumber(ctx, e.nextBlockNumber)
 	if err != nil {
 		if err.Error() == "not found" {
 			runtime.Gosched()
@@ -33,49 +34,55 @@ again:
 		}
 		return nil, err
 	}
-	lastFinBlock, err := e.client.BlockByNumber(ctx, big.NewInt(0).Sub(e.nextBlockNumber, big.NewInt(6)))
-	if err != nil {
-		return nil, err
-	}
-	lastTxs := lastBlock.Transactions()
-	lastFinTx := lastFinBlock.Transactions()
-	events := make([]Event, 0, lastTxs.Len()+lastFinTx.Len())
-	for i, tx := range lastTxs {
-		sender, err := e.client.TransactionSender(ctx, tx, lastBlock.Hash(), uint(i))
+	lastFinBlockN := big.NewInt(0).Sub(lastBlock.Number(), big.NewInt(6))
+	lastFinTx, err := e.repo.FindTxsByBlockID(lastFinBlockN)
+	return nil, err
+	lastTxs := lastBlock.Txs()
+	events := make([]Event, 0, len(lastTxs)+len(lastFinTx))
+	for _, tx := range lastTxs {
 		if err != nil {
 			return nil, err
 		}
-		event, err := NewEthereumTxEvent(tx, &sender, lastBlock.Number())
+		event, err := NewEthereumTxEvent(tx)
 		if err != nil {
 			return nil, err
 		}
 		events = append(events, event)
+		err = e.repo.StoreTxsByBlockID(event.Tx())
+		return nil, err
 	}
 	//
 
-	for i, tx := range lastFinTx {
-		sender, err := e.client.TransactionSender(ctx, tx, lastFinBlock.Hash(), uint(i))
-		if err != nil {
-			return nil, err
+	for _, tx := range lastFinTx {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
 		}
-		event, err := NewEthereumFinEvent(tx, &sender, lastFinBlock.Number())
+		correct, err := e.client.GetTxByBlockNumberAndIndex(ctx, tx.Block(), tx.(EthereumTx).Index())
+		if err != nil {
+			continue
+		}
+		if false == bytes.Equal(correct.ID(), tx.ID()) {
+			continue
+		}
+		event, err := NewEthereumFinEvent(tx.(EthereumTx))
 		if err != nil {
 			return nil, err
 		}
 		events = append(events, event)
 	}
+	e.repo.PurgeTxsByBlockID(lastFinBlockN)
 	e.incBlock()
 	return events, nil
 }
 
 func (e *ethereumWatcher) Close() error {
-	e.client.Close()
-	return nil
+	return e.client.Close()
 }
 
-func NewEthereumWatcher(client *ethclient.Client, nextBlockNum *big.Int) (EthereumWatcher, error) {
+func NewEthereumWatcher(client EthereumAPIClient, nextBlockNum *big.Int, repo Repo) (EthereumWatcher, error) {
 	o := &ethereumWatcher{}
 	o.client = client
 	o.nextBlockNumber = big.NewInt(0).Set(nextBlockNum)
+	o.repo = repo
 	return o, nil
 }
